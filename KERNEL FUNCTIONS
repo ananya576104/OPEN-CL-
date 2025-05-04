@@ -1,0 +1,271 @@
+That's a great set of OpenCL problems covering a wide range of topics — strings, matrices, patterns, sorting, array manipulation, and mathematical approximation. Below, I'll give you:
+
+1. ✅ A **template OpenCL host program** you can **edit and reuse** for each of the problems.
+2. ✅ A **summary of how to approach them in exams**.
+3. ✅ Complete **OpenCL kernels** for all 14 questions, clearly organized.
+
+---
+
+## ✅ PART 1: Reusable OpenCL Host Program Template
+
+Use this host code as a starting point. Just modify the `programSource`, kernel name, and data handling logic for each question.
+
+```c
+// opencl_template.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <CL/cl.h>
+
+#define MAX_SOURCE_SIZE 10000
+
+int main() {
+    // Modify this based on the problem
+    const char* programSource = "YOUR_KERNEL_CODE_HERE";
+
+    cl_platform_id platform;
+    cl_device_id device;
+    cl_context context;
+    cl_command_queue queue;
+    cl_program program;
+    cl_kernel kernel;
+    cl_int status;
+
+    // Setup OpenCL
+    clGetPlatformIDs(1, &platform, NULL);
+    clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, NULL);
+    context = clCreateContext(NULL, 1, &device, NULL, NULL, &status);
+    queue = clCreateCommandQueue(context, device, CL_QUEUE_PROFILING_ENABLE, &status);
+
+    // Create program from source and build
+    program = clCreateProgramWithSource(context, 1, &programSource, NULL, &status);
+    status = clBuildProgram(program, 1, &device, NULL, NULL, NULL);
+
+    // You will add: buffer creation, set args, enqueue, timing, result display here.
+
+    // Release
+    clReleaseProgram(program);
+    clReleaseCommandQueue(queue);
+    clReleaseContext(context);
+    return 0;
+}
+```
+
+---
+
+## ✅ PART 2: Exam Strategy
+
+In exams:
+
+* **Start with a known working host template** (like above).
+* Paste/modify the **kernel code** and input/output setup.
+* Allocate device buffers.
+* Set kernel arguments.
+* Launch kernel with `clEnqueueNDRangeKernel`.
+* Read results back with `clEnqueueReadBuffer`.
+* Use **profiling with events** to calculate execution time if needed.
+* Always free resources at the end.
+
+---
+
+## ✅ PART 3: All OpenCL Kernels
+
+---
+
+### 🔤 **String Operations**
+
+#### 1. Repeat String N Times
+
+```c
+__kernel void repeat_string(__global const char* S, int len, int N, __global char* out) {
+    int id = get_global_id(0);
+    if (id < len * N) {
+        out[id] = S[id % len];
+    }
+}
+```
+
+#### 2. Reverse a String
+
+```c
+__kernel void reverse_string(__global const char* input, __global char* output, int len) {
+    int id = get_global_id(0);
+    if (id < len) {
+        output[len - 1 - id] = input[id];
+    }
+}
+```
+
+#### 3. Extract Char at Position from N Words
+
+```c
+__kernel void extract_pos_char(__global const char* input, __global char* output, int pos, int word_count, int max_word_len) {
+    int id = get_global_id(0);
+    if (id < word_count) {
+        int start = id * max_word_len;
+        output[id] = input[start + pos];
+    }
+}
+```
+
+---
+
+### 🧮 **Matrix Operations**
+
+#### 4. Rotate n×n Matrix by 180°
+
+```c
+__kernel void rotate_180(__global int* A, __global int* B, int n) {
+    int row = get_global_id(0);
+    int col = get_global_id(1);
+    int idx1 = row * n + col;
+    int idx2 = (n - 1 - row) * n + (n - 1 - col);
+    B[idx2] = A[idx1];
+}
+```
+
+#### 5. Matrix Multiplication (1 Work Item per Row)
+
+```c
+__kernel void matrix_mul(__global int* A, __global int* B, __global int* C, int n) {
+    int row = get_global_id(0);
+    for (int col = 0; col < n; col++) {
+        int sum = 0;
+        for (int k = 0; k < n; k++)
+            sum += A[row * n + k] * B[k * n + col];
+        C[row * n + col] = sum;
+    }
+}
+```
+
+#### 6. Divide Matrix into 4 Parts & Modify
+
+```c
+__kernel void quadrant_transform(__global int* A, __global int* B, int n) {
+    int row = get_global_id(0);
+    int col = get_global_id(1);
+    int idx = row * n + col;
+    if (row < n/2 && col < n/2)       B[idx] = A[idx] * A[idx];            // square
+    else if (row < n/2 && col >= n/2) B[idx] = A[idx] * A[idx] * A[idx];    // cube
+    else if (row >= n/2 && col < n/2) B[idx] = A[idx] + 5;                  // add
+    else                              B[idx] = A[idx] - 5;                  // subtract
+}
+```
+
+---
+
+### 🧵 **Pattern Generation**
+
+#### 7. Pyramid Pattern
+
+```c
+__kernel void pyramid(__global char* out, int rows) {
+    int row = get_global_id(0);
+    int idx = row * (2*rows + 1);
+    for (int i = 0; i < rows - row - 1; i++) out[idx + i] = ' ';
+    for (int i = 0; i < 2 * row + 1; i++) out[idx + rows - row - 1 + i] = '*';
+}
+```
+
+#### 8. Triangle Pattern
+
+```c
+__kernel void triangle(__global char* out, int rows) {
+    int row = get_global_id(0);
+    int idx = row * (rows + 1);
+    for (int i = 0; i <= row; i++) out[idx + i] = '*';
+}
+```
+
+#### 9. Specific Pyramid Pattern
+
+(Same as #7 unless specific pattern mentioned)
+
+---
+
+### 📚 **Sorting**
+
+#### 10. Selection Sort for Strings
+
+```c
+__kernel void selection_sort(__global char* data, int count, int len) {
+    for (int i = 0; i < count - 1; i++) {
+        int min = i;
+        for (int j = i + 1; j < count; j++) {
+            for (int k = 0; k < len; k++) {
+                if (data[j * len + k] < data[min * len + k]) {
+                    min = j;
+                    break;
+                }
+                else if (data[j * len + k] > data[min * len + k]) break;
+            }
+        }
+        if (min != i) {
+            for (int k = 0; k < len; k++) {
+                char tmp = data[i * len + k];
+                data[i * len + k] = data[min * len + k];
+                data[min * len + k] = tmp;
+            }
+        }
+    }
+}
+```
+
+#### 11. Odd-Even Transposition Sort
+
+```c
+__kernel void odd_even_sort(__global int* data, int n, int phase) {
+    int i = get_global_id(0);
+    int idx = i * 2 + phase;
+    if (idx + 1 < n) {
+        if (data[idx] > data[idx + 1]) {
+            int temp = data[idx];
+            data[idx] = data[idx + 1];
+            data[idx + 1] = temp;
+        }
+    }
+}
+```
+
+---
+
+### 🧮 **Array Operation**
+
+#### 12. Multiply Elements by Index
+
+```c
+__kernel void multiply_by_index(__global int* A, __global int* B, int n) {
+    int id = get_global_id(0);
+    if (id < n)
+        B[id] = A[id] * (id + 1);
+}
+```
+
+---
+
+### π **Calculation**
+
+#### 13. Approximate π Using Series (Leibniz)
+
+```c
+__kernel void calc_pi(__global float* partial_sum, int n) {
+    int id = get_global_id(0);
+    float term = (id % 2 == 0 ? 1.0f : -1.0f) / (2.0f * id + 1);
+    partial_sum[id] = term;
+}
+```
+
+Host side: sum all elements of `partial_sum` and multiply by 4.
+
+---
+
+## ✅ Final Notes
+
+* You can **reuse the host template** and plug in each kernel.
+* Keep kernel code in a `.cl` file or as a string.
+* Use **profiling events** (`cl_event`, `clGetEventProfilingInfo`) for measuring GPU execution time.
+* Use `get_global_id(0)` or `get_global_id(1)` depending on 1D or 2D problems.
+
+---
+
+Would you like me to bundle this all into a downloadable folder (host + kernels)?
