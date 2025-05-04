@@ -1,0 +1,136 @@
+Here's a **CUDA kernel** that determines the total number of **Fibonacci numbers among the 8 neighbors** of **non-border elements** in a 2D matrix. This can be used as part of a CUDA program where each thread processes one **non-border** matrix element.
+
+---
+
+### ✅ **CUDA Kernel: Count Fibonacci Neighbors**
+
+```c
+__device__ bool isFibonacci(int n) {
+    // A number is Fibonacci if (5*n^2 + 4) or (5*n^2 - 4) is a perfect square
+    int x = 5 * n * n + 4;
+    int y = 5 * n * n - 4;
+
+    int sqrt_x = (int)sqrtf((float)x);
+    int sqrt_y = (int)sqrtf((float)y);
+
+    return (sqrt_x * sqrt_x == x) || (sqrt_y * sqrt_y == y);
+}
+
+__global__ void countFibonacciNeighbors(int *matrix, int *output, int width, int height) {
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (row > 0 && row < height - 1 && col > 0 && col < width - 1) {
+        int count = 0;
+
+        // Check 8 neighbors
+        for (int dr = -1; dr <= 1; dr++) {
+            for (int dc = -1; dc <= 1; dc++) {
+                if (dr == 0 && dc == 0) continue; // Skip center element
+                int neighbor = matrix[(row + dr) * width + (col + dc)];
+                if (isFibonacci(neighbor)) {
+                    count++;
+                }
+            }
+        }
+
+        output[row * width + col] = count;
+    }
+}
+```
+
+---
+
+### 🧠 Key Concepts:
+
+* `isFibonacci()` checks whether a number is Fibonacci using a mathematical identity.
+* The kernel skips **border elements**.
+* Each thread processes **one matrix element**, counts Fibonacci numbers in the 8 neighboring cells, and writes the count to the output matrix.
+
+---
+
+Would you like a full host-side program to test this kernel as well?
+
+
+
+
+### 2️⃣ **Tiled Convolution using Constant Memory for Mask**
+
+```c
+#define TILE_SIZE 256
+#define MAX_MASK_WIDTH 7
+
+__constant__ float d_mask[MAX_MASK_WIDTH];
+
+__global__ void conv1D_tiled(float *input, float *output, int n, int maskWidth) {
+    __shared__ float tile[TILE_SIZE + MAX_MASK_WIDTH - 1];
+
+    int tx = threadIdx.x;
+    int i = blockIdx.x * blockDim.x + tx;
+    int radius = maskWidth / 2;
+
+    // Load tile + halo
+    int halo_left = i - radius;
+    tile[tx] = (halo_left >= 0 && halo_left < n) ? input[halo_left] : 0;
+
+    if (tx < maskWidth - 1) {
+        int halo_right = i + blockDim.x - radius;
+        tile[tx + blockDim.x] = (halo_right >= 0 && halo_right < n) ? input[halo_right] : 0;
+    }
+
+    __syncthreads();
+
+    if (i < n) {
+        float result = 0;
+        for (int j = 0; j < maskWidth; j++) {
+            result += tile[tx + j] * d_mask[j];
+        }
+        output[i] = result;
+    }
+}
+```
+
+---
+
+### 3️⃣ **Stencil Sum of Array Elements**
+
+A stencil sum typically computes the sum of neighbors within a radius around each element.
+
+```c
+__global__ void stencilSum(int *input, int *output, int n, int radius) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int sum = 0;
+
+    if (i < n) {
+        for (int j = -radius; j <= radius; j++) {
+            int idx = i + j;
+            if (idx >= 0 && idx < n)
+                sum += input[idx];
+        }
+        output[i] = sum;
+    }
+}
+```
+
+---
+Here is the **CUDA kernel** that computes the average of every **32 consecutive elements** in an integer array. Each thread is responsible for computing the average of its own 32-element segment:
+
+
+#define SEGMENT_SIZE 32
+
+__global__ void avg32Kernel(int *input, float *output, int arr_size) {
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int start = tid * SEGMENT_SIZE;
+
+    if (start + SEGMENT_SIZE <= arr_size) {
+        int sum = 0;
+        for (int i = 0; i < SEGMENT_SIZE; i++) {
+            sum += input[start + i];
+        }
+        output[tid] = sum / (float)SEGMENT_SIZE;
+    }
+}
+```
+
+
+
